@@ -8,8 +8,7 @@ const eventSchema = new mongoose.Schema({
   data: Object,
   ip: String,
   location: String,
-  userAgent: String,
-  createdAt: { type: Date, default: Date.now, index: true }
+  userAgent: String
 }, { timestamps: true });
 
 eventSchema.index({ userId: 1, websiteId: 1, createdAt: -1 });

@@ -1,3 +1,3 @@
-module.exports = () => {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-};
+const crypto = require("node:crypto");
+
+module.exports = () => crypto.randomInt(100000, 999999).toString();

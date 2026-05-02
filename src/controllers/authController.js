@@ -5,6 +5,7 @@ const User = require("../models/User");
 const Event = require("../models/Event");
 const generateOTP = require("../utils/generateOTP");
 const transporter = require("../config/mailer");
+const { validateEmail, validatePassword } = require("../utils/validate");
 
 exports.getUserDetails = async (req, res) => {
   try {
@@ -30,18 +31,23 @@ exports.getUserDetails = async (req, res) => {
 exports.getUsers = async (req, res) => {
   try {
     const users = await User.find();
-    const result = [];
+    const apiKeys = users.map((user) => user.apiKey).filter(Boolean);
+    const lastEvents = await Event.aggregate([
+      { $match: { apiKey: { $in: apiKeys } } },
+      { $sort: { createdAt: -1 } },
+      { $group: { _id: "$apiKey", ip: { $first: "$ip" }, createdAt: { $first: "$createdAt" } } }
+    ]);
+    const eventMap = new Map(lastEvents.map((e) => [e._id, e]));
 
-    for (const user of users) {
-      const lastEvent = await Event.findOne({ apiKey: user.apiKey }).sort({ createdAt: -1 });
-
-      result.push({
+    const result = users.map((user) => {
+      const lastEvent = eventMap.get(user.apiKey) || null;
+      return {
         email: user.email,
         apiKey: user.apiKey,
         lastIP: lastEvent ? lastEvent.ip : null,
         lastActivity: lastEvent ? lastEvent.createdAt : null
-      });
-    }
+      };
+    });
 
     res.json(result);
   } catch (err) {
@@ -92,9 +98,11 @@ exports.register = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ msg: "Email and password are required" });
-    }
+    const emailError = validateEmail(email);
+    if (emailError) return res.status(400).json({ msg: emailError });
+
+    const passwordError = validatePassword(password);
+    if (passwordError) return res.status(400).json({ msg: passwordError });
 
     const existingUser = await User.findOne({ email });
 
