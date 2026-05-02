@@ -1,9 +1,9 @@
 const bcrypt = require("bcryptjs");
-const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const Event = require("../models/Event");
 const generateOTP = require("../utils/generateOTP");
+const { generateApiKey } = require("../utils/apiKey");
 const transporter = require("../config/mailer");
 const { validateEmail, validatePassword } = require("../utils/validate");
 
@@ -158,10 +158,16 @@ exports.verifyOTP = async (req, res) => {
     user.isVerified = true;
     user.otp = null;
     user.otpExpires = null;
+    if (!user.apiKey) {
+      user.apiKey = generateApiKey();
+    }
 
     await user.save();
 
-    res.json({ msg: "Email verified successfully" });
+    res.json({
+      msg: "Email verified successfully",
+      apiKey: user.apiKey
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ msg: "Server error" });
@@ -188,7 +194,7 @@ exports.login = async (req, res) => {
     }
 
     if (!user.apiKey) {
-      user.apiKey = "sk_" + crypto.randomUUID();
+      user.apiKey = generateApiKey();
     }
 
     await user.save();
