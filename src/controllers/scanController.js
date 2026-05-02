@@ -104,31 +104,38 @@ const SCAN_SCHEDULES = {
 };
 const THREAT_METADATA = {
   xss: {
-    title: "Cross-Site Scripting (XSS)",
+    userTitle: "مشكلة قد تسمح بحقن محتوى ضار في الصفحة",
+    technicalTitle: "Cross-Site Scripting (XSS)",
     definition: "The website reflects untrusted input in a way that could let an attacker run malicious JavaScript in a visitor's browser."
   },
   sql_injection: {
-    title: "SQL Injection Indicators",
+    userTitle: "ثغرة محتملة في قاعدة البيانات",
+    technicalTitle: "SQL Injection Indicators",
     definition: "The website exposes database error patterns that may indicate unsafe SQL query handling or injection risk."
   },
   missing_https: {
-    title: "Missing HTTPS",
+    userTitle: "الموقع لا يستخدم اتصالا آمنا بشكل كاف",
+    technicalTitle: "Missing HTTPS",
     definition: "The website is reachable without secure HTTPS transport, exposing user traffic to interception or tampering."
   },
   missing_security_headers: {
-    title: "Missing Security Headers",
+    userTitle: "إعدادات الحماية في المتصفح غير مكتملة",
+    technicalTitle: "Missing Security Headers",
     definition: "The website is missing recommended browser security headers that help reduce common client-side attack impact."
   },
   exposed_directories: {
-    title: "Exposed Directories or Sensitive Files",
+    userTitle: "ملفات أو مجلدات حساسة ظاهرة للعامة",
+    technicalTitle: "Exposed Directories or Sensitive Files",
     definition: "The website exposes internal paths or sensitive files that should not be publicly reachable."
   },
   outdated_libraries: {
-    title: "Outdated or Vulnerable Libraries",
+    userTitle: "مكتبات الموقع قديمة أو غير آمنة",
+    technicalTitle: "Outdated or Vulnerable Libraries",
     definition: "The website uses client-side libraries that appear outdated or match vulnerable version heuristics."
   },
   weak_authentication: {
-    title: "Weak Authentication Protection",
+    userTitle: "حماية تسجيل الدخول ضعيفة",
+    technicalTitle: "Weak Authentication Protection",
     definition: "Authentication endpoints appear to lack visible rate-limiting protections, increasing brute-force risk."
   }
 };
@@ -325,7 +332,9 @@ const buildFrontendThreatReport = (targetUrl, vulnerabilities) => {
     .filter(([, item]) => isThreatDetected(item))
     .map(([key, item]) => ({
       key,
-      title: THREAT_METADATA[key]?.title || key,
+      user_title: THREAT_METADATA[key]?.userTitle || key,
+      technical_title: THREAT_METADATA[key]?.technicalTitle || key,
+      title: THREAT_METADATA[key]?.userTitle || key,
       definition: THREAT_METADATA[key]?.definition || item.details,
       status: item.status,
       severity: item.severity,
