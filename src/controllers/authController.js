@@ -139,7 +139,7 @@ exports.verifyOTP = async (req, res) => {
       return res.status(400).json({ msg: "User not found" });
     }
 
-    if (user.otp !== otp) {
+    if (String(user.otp) !== String(otp)) {
       return res.status(400).json({ msg: "Invalid OTP" });
     }
 
@@ -187,10 +187,15 @@ exports.login = async (req, res) => {
 
     const token = jwt.sign(
       { id: user._id, plan: user.plan },
-      process.env.JWT_SECRET
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
     );
 
-    res.json({ token, apiKey: user.apiKey });
+    res.json({
+      token,
+      apiKey: user.apiKey,
+      expiresIn: process.env.JWT_EXPIRES_IN || "7d"
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ msg: "Server error" });
@@ -204,6 +209,10 @@ exports.resendOTP = async (req, res) => {
 
     if (!user) {
       return res.status(404).json({ msg: "User not found" });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({ msg: "User is already verified" });
     }
 
     const otp = generateOTP();

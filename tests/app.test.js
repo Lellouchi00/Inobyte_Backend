@@ -31,3 +31,11 @@ test("unknown routes return 404", async () => {
   assert.equal(response.status, 404);
   assert.deepEqual(body, { msg: "Route not found" });
 });
+
+test("dashboard requires authentication", async () => {
+  const response = await request("/api/dashboard");
+  const body = await response.json();
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(body, { msg: "No token" });
+});

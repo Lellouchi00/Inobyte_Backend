@@ -1,9 +1,17 @@
 const mongoose = require("mongoose");
 
 const alertSchema = new mongoose.Schema({
-  userId: mongoose.Schema.Types.ObjectId,
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+  websiteId: { type: mongoose.Schema.Types.ObjectId, ref: "Website", index: true },
   message: String,
-  severity: String
+  severity: {
+    type: String,
+    enum: ["low", "medium", "high"],
+    default: "low"
+  },
+  standards: Object
 }, { timestamps: true });
+
+alertSchema.index({ userId: 1, websiteId: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Alert", alertSchema);
