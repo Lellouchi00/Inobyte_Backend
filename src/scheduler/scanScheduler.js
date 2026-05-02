@@ -4,6 +4,7 @@ const Scan = require("../models/Scan");
 const Website = require("../models/Website");
 const {
   buildAlertRecords,
+  createStoredReport,
   runScanChecks,
   summarizeAlerts
 } = require("../controllers/scanController");
@@ -43,6 +44,13 @@ const processWebsiteScan = async (website, selectedChecks, scanType) => {
     status: "completed",
     scanType,
     results: report
+  });
+
+  await createStoredReport({
+    userId: website.userId,
+    websiteId: website._id,
+    scanType,
+    scanReport: report
   });
 
   if (report.send_alert) {

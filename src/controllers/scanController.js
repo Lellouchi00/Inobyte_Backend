@@ -1,6 +1,7 @@
 const dns = require("node:dns/promises");
 const tls = require("node:tls");
 const Alert = require("../models/Alert");
+const Report = require("../models/Report");
 const Scan = require("../models/Scan");
 const Website = require("../models/Website");
 const { getStandards } = require("../config/securityStandards");
@@ -100,6 +101,36 @@ const SCAN_SCHEDULES = {
   exposed_directories: "weekly",
   outdated_libraries: "weekly",
   weak_authentication: "weekly"
+};
+const THREAT_METADATA = {
+  xss: {
+    title: "Cross-Site Scripting (XSS)",
+    definition: "The website reflects untrusted input in a way that could let an attacker run malicious JavaScript in a visitor's browser."
+  },
+  sql_injection: {
+    title: "SQL Injection Indicators",
+    definition: "The website exposes database error patterns that may indicate unsafe SQL query handling or injection risk."
+  },
+  missing_https: {
+    title: "Missing HTTPS",
+    definition: "The website is reachable without secure HTTPS transport, exposing user traffic to interception or tampering."
+  },
+  missing_security_headers: {
+    title: "Missing Security Headers",
+    definition: "The website is missing recommended browser security headers that help reduce common client-side attack impact."
+  },
+  exposed_directories: {
+    title: "Exposed Directories or Sensitive Files",
+    definition: "The website exposes internal paths or sensitive files that should not be publicly reachable."
+  },
+  outdated_libraries: {
+    title: "Outdated or Vulnerable Libraries",
+    definition: "The website uses client-side libraries that appear outdated or match vulnerable version heuristics."
+  },
+  weak_authentication: {
+    title: "Weak Authentication Protection",
+    definition: "Authentication endpoints appear to lack visible rate-limiting protections, increasing brute-force risk."
+  }
 };
 const CHECK_DEFINITIONS = [
   {
@@ -272,6 +303,7 @@ const withSchedule = (key, result) => ({
   ...result,
   schedule: SCAN_SCHEDULES[key]
 });
+const isThreatDetected = (item) => item?.status === "VULNERABLE";
 
 const buildSummary = (vulnerabilities) => {
   const entries = Object.entries(vulnerabilities);
@@ -281,12 +313,54 @@ const buildSummary = (vulnerabilities) => {
     vulnerable: entries.filter(([, item]) => item.status === "VULNERABLE").length,
     safe: entries.filter(([, item]) => item.status === "SAFE").length,
     unknown: entries.filter(([, item]) => item.status === "UNKNOWN").length,
-    threats_found: entries.filter(([, item]) => item.alert).map(([key]) => key),
+    threats_found: entries.filter(([, item]) => isThreatDetected(item)).map(([key]) => key),
     threats_safe: entries
-      .filter(([, item]) => !item.alert && item.status !== "UNKNOWN")
+      .filter(([, item]) => item.status === "SAFE")
       .map(([key]) => key)
   };
 };
+
+const buildFrontendThreatReport = (targetUrl, vulnerabilities) => {
+  const detectedThreats = Object.entries(vulnerabilities)
+    .filter(([, item]) => isThreatDetected(item))
+    .map(([key, item]) => ({
+      key,
+      title: THREAT_METADATA[key]?.title || key,
+      definition: THREAT_METADATA[key]?.definition || item.details,
+      status: item.status,
+      severity: item.severity,
+      schedule: item.schedule,
+      details: item.details,
+      evidence: item.evidence || item.found_paths || item.libraries_found || null
+    }));
+
+  return {
+    title: "Inobyte Security Scan Report",
+    description: "Threat summary generated from the latest website scan.",
+    target_url: targetUrl,
+    threats_detected_count: detectedThreats.length,
+    threats_detected: detectedThreats
+  };
+};
+
+const buildStoredReportPayload = (scanReport, scanType) => ({
+  scanId: scanReport.scan_id,
+  scanType,
+  targetUrl: scanReport.target_url,
+  title: scanReport.report.title,
+  description: scanReport.report.description,
+  summary: scanReport.summary,
+  threatsDetectedCount: scanReport.report.threats_detected_count,
+  threatsDetected: scanReport.report.threats_detected,
+  overallRisk: scanReport.overall_risk,
+  generatedAt: new Date()
+});
+
+const createStoredReport = async ({ userId, websiteId, scanType, scanReport }) => Report.create({
+  userId,
+  websiteId,
+  ...buildStoredReportPayload(scanReport, scanType)
+});
 
 const checkDns = async (hostname) => {
   try {
@@ -535,7 +609,7 @@ const checkExposedDirectories = async (baseUrl) => {
     details: foundPaths.length
       ? "Sensitive paths were reachable or disclosed access controls on the target."
       : "No common sensitive path returned 200 or 403 during this scan.",
-    alert: highestSeverity === "MEDIUM" || highestSeverity === "HIGH"
+    alert: foundPaths.length > 0
   };
 };
 
@@ -743,7 +817,7 @@ const buildAlertRecords = (report, websiteId, userId) => {
   const vulnerabilityEntries = Object.entries(report.vulnerabilities);
 
   for (const [key, item] of vulnerabilityEntries) {
-    if (!item.alert) {
+    if (!isThreatDetected(item)) {
       continue;
     }
 
@@ -766,7 +840,7 @@ const buildAlertRecords = (report, websiteId, userId) => {
 
 const summarizeAlerts = (report, previousReport = null) => {
   const active = Object.entries(report.vulnerabilities)
-    .filter(([, value]) => value.alert)
+    .filter(([, value]) => isThreatDetected(value))
     .map(([key, value]) => `${key}:${value.severity}`);
 
   if (!active.length) {
@@ -778,7 +852,7 @@ const summarizeAlerts = (report, previousReport = null) => {
   }
 
   const previousActive = Object.entries(previousReport.vulnerabilities)
-    .filter(([, value]) => value?.alert)
+    .filter(([, value]) => isThreatDetected(value))
     .map(([key, value]) => `${key}:${value.severity}`);
 
   const changed = active.join("|") !== previousActive.join("|");
@@ -827,8 +901,9 @@ const runScanChecks = async (domain, selectedKeys = CHECK_DEFINITIONS.map((item)
     scan_id: scanId,
     vulnerabilities,
     summary: buildSummary(vulnerabilities),
+    report: buildFrontendThreatReport(baseUrl.toString(), vulnerabilities),
     overall_risk: overallRisk,
-    send_alert: vulnerabilityItems.some((item) => item.alert),
+    send_alert: vulnerabilityItems.some((item) => isThreatDetected(item)),
     alert_message: ""
   };
 };
@@ -879,6 +954,13 @@ exports.scanWebsite = async (req, res) => {
       results: report
     });
 
+    const storedReport = await createStoredReport({
+      userId: req.user.id,
+      websiteId: website._id,
+      scanType: "manual",
+      scanReport: report
+    });
+
     if (report.send_alert) {
       const alertRecords = buildAlertRecords(report, website._id, req.user.id);
       const alerts = await Alert.insertMany(alertRecords);
@@ -894,7 +976,22 @@ exports.scanWebsite = async (req, res) => {
       }
     }
 
-    res.json(report);
+    res.json({
+      ...report,
+      report: {
+        id: storedReport._id,
+        scan_id: storedReport.scanId,
+        scan_type: storedReport.scanType,
+        title: storedReport.title,
+        description: storedReport.description,
+        target_url: storedReport.targetUrl,
+        summary: storedReport.summary,
+        threats_detected_count: storedReport.threatsDetectedCount,
+        threats_detected: storedReport.threatsDetected,
+        overall_risk: storedReport.overallRisk,
+        generated_at: storedReport.generatedAt
+      }
+    });
   } catch (err) {
     console.error(err);
 
@@ -915,6 +1012,7 @@ exports.checkSqlInjection = checkSqlInjection;
 exports.checkWeakAuthentication = checkWeakAuthentication;
 exports.checkXss = checkXss;
 exports.buildAlertRecords = buildAlertRecords;
+exports.createStoredReport = createStoredReport;
 exports.runScanChecks = runScanChecks;
 exports.summarizeAlerts = summarizeAlerts;
 exports.scanTarget = scanTarget;
