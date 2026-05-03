@@ -104,37 +104,37 @@ const SCAN_SCHEDULES = {
 };
 const THREAT_METADATA = {
   xss: {
-    userTitle: "مشكلة قد تسمح بحقن محتوى ضار في الصفحة",
+    userTitle: "A malicious script vulnerability",
     technicalTitle: "Cross-Site Scripting (XSS)",
     definition: "The website reflects untrusted input in a way that could let an attacker run malicious JavaScript in a visitor's browser."
   },
   sql_injection: {
-    userTitle: "ثغرة محتملة في قاعدة البيانات",
+    userTitle: "A data base blind spot",
     technicalTitle: "SQL Injection Indicators",
     definition: "The website exposes database error patterns that may indicate unsafe SQL query handling or injection risk."
   },
   missing_https: {
-    userTitle: "الموقع لا يستخدم اتصالا آمنا بشكل كاف",
+    userTitle: "An unencrypted connection",
     technicalTitle: "Missing HTTPS",
     definition: "The website is reachable without secure HTTPS transport, exposing user traffic to interception or tampering."
   },
   missing_security_headers: {
-    userTitle: "إعدادات الحماية في المتصفح غير مكتملة",
+    userTitle: "Missing browser safety locks",
     technicalTitle: "Missing Security Headers",
     definition: "The website is missing recommended browser security headers that help reduce common client-side attack impact."
   },
   exposed_directories: {
-    userTitle: "ملفات أو مجلدات حساسة ظاهرة للعامة",
+    userTitle: "Publicly visible internal files",
     technicalTitle: "Exposed Directories or Sensitive Files",
     definition: "The website exposes internal paths or sensitive files that should not be publicly reachable."
   },
   outdated_libraries: {
-    userTitle: "مكتبات الموقع قديمة أو غير آمنة",
+    userTitle: "Old or vulnerable components",
     technicalTitle: "Outdated or Vulnerable Libraries",
     definition: "The website uses client-side libraries that appear outdated or match vulnerable version heuristics."
   },
   weak_authentication: {
-    userTitle: "حماية تسجيل الدخول ضعيفة",
+    userTitle: "Weak login protection",
     technicalTitle: "Weak Authentication Protection",
     definition: "Authentication endpoints appear to lack visible rate-limiting protections, increasing brute-force risk."
   }
@@ -830,10 +830,14 @@ const buildAlertRecords = (report, websiteId, userId) => {
       continue;
     }
 
+    const metadata = THREAT_METADATA[key] || {};
+
     records.push({
       userId,
       websiteId,
       message: `${key.replace(/_/g, " ")} detected on ${report.target_url}`,
+      userTitle: metadata.userTitle || key,
+      technicalTitle: metadata.technicalTitle || key,
       severity: item.severity.toLowerCase(),
       standards: {
         category: key,
@@ -979,6 +983,8 @@ exports.scanWebsite = async (req, res) => {
           id: alert._id,
           websiteId: alert.websiteId,
           message: alert.message,
+          userTitle: alert.userTitle,
+          technicalTitle: alert.technicalTitle,
           severity: alert.severity,
           timestamp: alert.createdAt
         });

@@ -4,6 +4,8 @@ const alertSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
   websiteId: { type: mongoose.Schema.Types.ObjectId, ref: "Website", index: true },
   message: String,
+  userTitle: String,
+  technicalTitle: String,
   severity: {
     type: String,
     enum: ["low", "medium", "high"],

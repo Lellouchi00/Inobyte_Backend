@@ -66,7 +66,7 @@ exports.getDashboard = async (req, res) => {
       Alert.find(scope)
         .sort({ createdAt: -1 })
         .limit(10)
-        .select("websiteId message severity createdAt")
+        .select("websiteId message userTitle technicalTitle severity createdAt")
         .lean(),
       Event.aggregate([
         { $match: recentScope },
@@ -118,6 +118,8 @@ exports.getDashboard = async (req, res) => {
         id: alert._id,
         websiteId: alert.websiteId,
         message: alert.message,
+        userTitle: alert.userTitle,
+        technicalTitle: alert.technicalTitle,
         severity: alert.severity,
         timestamp: alert.createdAt
       })),
@@ -126,6 +128,74 @@ exports.getDashboard = async (req, res) => {
         alertsBySeverity
       }
     });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Server error" });
+  }
+};
+
+exports.getAlerts = async (req, res) => {
+  try {
+    const website = await getWebsiteForUser(req.user.id, req.query.websiteId);
+
+    if (!website) {
+      return res.status(404).json({ msg: "Website not found" });
+    }
+
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const skip = (page - 1) * limit;
+
+    const scope = {
+      userId: website.userId,
+      websiteId: website._id
+    };
+
+    const alerts = await Alert.find(scope)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .select("websiteId message userTitle technicalTitle severity createdAt")
+      .lean();
+
+    const total = await Alert.countDocuments(scope);
+
+    res.json({
+      alerts: alerts.map((alert) => ({
+        id: alert._id,
+        websiteId: alert.websiteId,
+        message: alert.message,
+        userTitle: alert.userTitle,
+        technicalTitle: alert.technicalTitle,
+        severity: alert.severity,
+        timestamp: alert.createdAt
+      })),
+      pagination: {
+        total,
+        page,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ msg: "Server error" });
+  }
+};
+
+exports.deleteAlert = async (req, res) => {
+  try {
+    const alertId = req.params.id;
+
+    const alert = await Alert.findOneAndDelete({ 
+      _id: alertId, 
+      userId: req.user.id 
+    });
+
+    if (!alert) {
+      return res.status(404).json({ msg: "Alert not found or unauthorized" });
+    }
+
+    res.json({ msg: "Alert deleted successfully", id: alertId });
   } catch (err) {
     console.error(err);
     res.status(500).json({ msg: "Server error" });

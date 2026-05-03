@@ -23,6 +23,8 @@ const emitAlerts = (userId, alerts) => {
       id: alert._id,
       websiteId: alert.websiteId,
       message: alert.message,
+      userTitle: alert.userTitle,
+      technicalTitle: alert.technicalTitle,
       severity: alert.severity,
       timestamp: alert.createdAt
     });

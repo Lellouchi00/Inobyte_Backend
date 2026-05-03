@@ -90,6 +90,8 @@ exports.trackEvent = async (req, res) => {
       emitToUser(userRoom, "new_alert", {
         id: alert._id,
         message: alert.message,
+        userTitle: alert.userTitle,
+        technicalTitle: alert.technicalTitle,
         severity: alert.severity,
         timestamp: alert.createdAt
       });
@@ -103,6 +105,8 @@ exports.trackEvent = async (req, res) => {
       alerts: alerts.map((alert) => ({
         id: alert._id,
         message: alert.message,
+        userTitle: alert.userTitle,
+        technicalTitle: alert.technicalTitle,
         severity: alert.severity,
         timestamp: alert.createdAt
       }))
